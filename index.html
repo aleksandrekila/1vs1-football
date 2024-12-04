@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Football Game</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #2a9d8f;
+    }
+
+    #gameCanvas {
+      display: block;
+      margin: 0 auto;
+      background: #228B22; /* Stadium Green */
+      border: 2px solid black;
+    }
+
+    #scoreboard {
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 10px;
+      font-size: 20px;
+      border-radius: 10px;
+    }
+
+    #startScreen {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: #fff;
+      font-size: 40px;
+      display: block;
+    }
+
+    #startButton {
+      font-size: 30px;
+      padding: 20px;
+      background: #008CBA;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 10px;
+    }
+
+    #pauseButton {
+      position: fixed;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 18px;
+      padding: 10px;
+      background: #ff6347;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Start Screen -->
+  <div id="startScreen">
+    <p>Football Game</p>
+    <button id="startButton">Start Game</button>
+  </div>
+
+  <!-- Scoreboard -->
+  <div id="scoreboard">
+    <p>Team A: <span id="scoreA">0</span> - Team B: <span id="scoreB">0</span></p>
+  </div>
+
+  <!-- Game Canvas -->
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+  <!-- Pause Button -->
+  <button id="pauseButton">Pause</button>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const PLAYER_WIDTH = 20;
+    const PLAYER_HEIGHT = 60;
+    const BALL_RADIUS = 10;
+
+    let isPaused = false;
+    let scoreA = 0;
+    let scoreB = 0;
+    let ballX = canvas.width / 2;
+    let ballY = canvas.height / 2;
+    let ballSpeedX = 2;
+    let ballSpeedY = 2;
+
+    let playerAX = 50;
+    let playerAY = canvas.height / 2 - PLAYER_HEIGHT / 2;
+    let playerBX = canvas.width - 50 - PLAYER_WIDTH;
+    let playerBY = canvas.height / 2 - PLAYER_HEIGHT / 2;
+
+    let isStarted = false;
+
+    // Key movement variables (for PC)
+    let upPressed = false;
+    let downPressed = false;
+
+    // AI movement variables
+    let aiSpeed = 3;
+
+    document.getElementById("startButton").addEventListener("click", startGame);
+    document.getElementById("pauseButton").addEventListener("click", togglePause);
+
+    // Handle keydown events for player movement (PC)
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "ArrowUp") upPressed = true;
+      if (event.key === "ArrowDown") downPressed = true;
+    });
+
+    // Handle keyup events for player movement (PC)
+    document.addEventListener("keyup", function (event) {
+      if (event.key === "ArrowUp") upPressed = false;
+      if (event.key === "ArrowDown") downPressed = false;
+    });
+
+    // Handle touch events for mobile (Move player A)
+    let touchY = 0;
+    canvas.addEventListener("touchstart", function (event) {
+      touchY = event.touches[0].clientY;
+    });
+
+    canvas.addEventListener("touchmove", function (event) {
+      event.preventDefault();  // Prevents screen scrolling on mobile
+      const touch = event.touches[0];
+      touchY = touch.clientY;
+      playerAY = touchY - PLAYER_HEIGHT / 2; // Player follows touch
+    });
+
+    // Draw the football field lines
+    function drawStadiumLines() {
+      // Center line
+      ctx.fillStyle = "white";
+      ctx.fillRect(canvas.width / 2 - 1, 0, 2, canvas.height);
+
+      // Half-circle in the middle (complete circle)
+      ctx.beginPath();
+      ctx.arc(canvas.width / 2, canvas.height / 2, 50, 0, Math.PI * 2); // Complete circle
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Penalty boxes
+      ctx.fillRect(50, 100, 2, 400); // Left
+      ctx.fillRect(canvas.width - 50 - 2, 100, 2, 400); // Right
+    }
+
+    // Draw players
+    function drawPlayer(x, y, color) {
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, PLAYER_WIDTH, PLAYER_HEIGHT);
+    }
+
+    // Draw Ball
+    function drawBall() {
+      ctx.beginPath();
+      ctx.arc(ballX, ballY, BALL_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = "#FF5733"; // Ball color
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    // Check for player-ball collision
+    function checkBallPlayerCollision(playerX, playerY, playerWidth, playerHeight) {
+      // Check if the ball is colliding with the player
+      if (
+        ballX + BALL_RADIUS > playerX &&
+        ballX - BALL_RADIUS < playerX + playerWidth &&
+        ballY + BALL_RADIUS > playerY &&
+        ballY - BALL_RADIUS < playerY + playerHeight
+      ) {
+        // Ball hits the player, bounce back
+        let angle = Math.atan2(ballY - (playerY + playerHeight / 2), ballX - (playerX + playerWidth / 2));
+        let speed = Math.sqrt(ballSpeedX * ballSpeedX + ballSpeedY * ballSpeedY);
+        ballSpeedX = Math.cos(angle) * speed;
+        ballSpeedY = Math.sin(angle) * speed;
+      }
+    }
+
+    // Update the game (ball & player positions)
+    function updateGame() {
+      if (!isPaused) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        drawStadiumLines();
+        drawBall();
+        drawPlayer(playerAX, playerAY, "blue"); // Player A
+        drawPlayer(playerBX, playerBY, "red");  // Player B
+
+        // Update Ball Position
+        ballX += ballSpeedX;
+        ballY += ballSpeedY;
+
+        // Ball collision with top and bottom
+        if (ballY - BALL_RADIUS < 0 || ballY + BALL_RADIUS > canvas.height) {
+          ballSpeedY = -ballSpeedY;
+        }
+
+        // Ball collision with left and right (goal scoring)
+        if (ballX - BALL_RADIUS < 0) {
+          scoreB += 1;
+          resetBall();
+        } else if (ballX + BALL_RADIUS > canvas.width) {
+          scoreA += 1;
+          resetBall();
+        }
+
+        // Player Movement for Player A (User)
+        if (upPressed && playerAY > 0) playerAY -= 5;
+        if (downPressed && playerAY < canvas.height - PLAYER_HEIGHT) playerAY += 5;
+
+        // Simple AI Movement for Player B (Opponent)
+        if (ballY < playerBY + PLAYER_HEIGHT / 2) {
+          playerBY -= aiSpeed;
+        } else if (ballY > playerBY + PLAYER_HEIGHT / 2) {
+          playerBY += aiSpeed;
+        }
+
+        // Check for player-ball collision
+        checkBallPlayerCollision(playerAX, playerAY, PLAYER_WIDTH, PLAYER_HEIGHT); // Player A collision
+        checkBallPlayerCollision(playerBX, playerBY, PLAYER_WIDTH, PLAYER_HEIGHT); // Player B collision
+
+        // Update Scoreboard
+        document.getElementById("scoreA").textContent = scoreA;
+        document.getElementById("scoreB").textContent = scoreB;
+      }
+    }
+
+    // Reset the ball to center
+    function resetBall() {
+      ballX = canvas.width / 2;
+      ballY = canvas.height / 2;
+      ballSpeedX = -ballSpeedX;  // Change direction after scoring
+      ballSpeedY = 2;
+    }
+
+    // Toggle Pause
+    function togglePause() {
+      isPaused = !isPaused;
+      document.getElementById("pauseButton").textContent = isPaused ? "Resume" : "Pause";
+    }
+
+    // Start Game
+    function startGame() {
+      document.getElementById("startScreen").style.display = "none";
+      isStarted = true;
+      setInterval(updateGame, 1000 / 60); // 60 FPS
+    }
+  </script>
+</body>
+</html>
